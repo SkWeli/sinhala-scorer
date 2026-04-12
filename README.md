@@ -54,6 +54,7 @@ graph TD
 ```
 ## 📁 Structure
 
+```
 sinhala_scorer/
 ├── app.py # Streamlit UI
 ├── rag.py # RAG pipeline
@@ -65,6 +66,7 @@ sinhala_scorer/
 ├── chroma_db/ # Vector store (auto-generated)
 ├── requirements.txt
 └── screenshots/
+```
 
 ## 📊 Sample Questions (Option 2: Colonial)
 1. පෘතුගීසි යුගයේ ආර්ථික බලපෑම් (Events:8, Economy:6, Social:6)
