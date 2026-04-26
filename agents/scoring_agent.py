@@ -1,65 +1,22 @@
 """
-Agent 3 — Scoring Agent
-Calls the local OLLAMA model with a structured prompt to score
-the student answer criterion-by-criterion and return JSON results.
+Agent 3 — Scoring Agent (Rule-Based)
+Scores each criterion deterministically using:
+  - Coverage agent flags
+  - RAG passage keyword overlap
+  - Ontology concept matching
+No LLM call — fast, reliable, explainable.
 """
 
-import json
-import re
-import ollama
-
-from config.settings import OLLAMA_MODEL, OLLAMA_BASE_URL, MAX_MARKS
-
-
-# ── Prompt Template ────────────────────────────────────────────────────────────
-SCORING_PROMPT = """\
-You are an expert Sri Lankan history examiner with deep knowledge of the
-Colonial period (Portuguese, Dutch, and British rule).
-
-QUESTION:
-{question}
-
-MARKING GUIDE (each criterion has a maximum mark allocation):
-{marking_guide_text}
-
-RETRIEVED REFERENCE CONTEXT (from the knowledge base):
-{rag_context}
-
-ONTOLOGY CONCEPTS (key historical entities and relationships):
-{ontology_concepts}
-
-STUDENT ANSWER (written in Sinhala — evaluate meaning, not just keywords):
-{student_answer}
-
-TASK:
-For each criterion in the marking guide:
-  1. Decide how many marks to award (0 to max for that criterion).
-  2. Provide a brief justification citing specific evidence from the
-     student's answer AND/OR the retrieved context.
-
-Return ONLY valid JSON — no markdown fences, no extra text:
-{{
-  "criterion_scores": [
-    {{
-      "criterion": "<exact criterion text>",
-      "awarded": <integer>,
-      "max": <integer>,
-      "reason": "<1-2 sentence justification in English>"
-    }}
-  ],
-  "total_score": <integer 0-20>,
-  "overall_comment": "<2-3 sentence overall assessment in English>"
-}}
-"""
+from config.settings import MAX_MARKS
 
 
 class ScoringAgent:
     """
-    Responsibilities:
-      - Format the structured scoring prompt
-      - Call OLLAMA (local inference) for criterion-level scoring
-      - Parse and validate the JSON response
-      - Provide a safe fallback if parsing fails
+    Rule-based criterion scorer.
+    Awards marks based on evidence found in:
+      1. Student answer keyword overlap with criterion
+      2. RAG retrieved passages matching criterion
+      3. Ontology concepts matched
     """
 
     def run(
@@ -67,78 +24,78 @@ class ScoringAgent:
         question: dict,
         student_answer: str,
         retrieval_result: dict,
+        coverage_result: dict,
     ) -> dict:
 
-        # ── Format marking guide ──────────────────────────────────────────────
-        mg_lines = [
-            f"{i+1}. {c['criterion']} [{c['marks']} marks]"
-            for i, c in enumerate(question["marking_guide"])
-        ]
-        mg_text = "\n".join(mg_lines)
+        answer_lower   = student_answer.lower()
+        rag_passages   = retrieval_result.get("rag_passages", [])
+        onto_concepts  = retrieval_result.get("ontology_concepts", [])
+        onto_text      = " ".join(onto_concepts).lower()
+        rag_text       = " ".join(p["content"] for p in rag_passages).lower()
 
-        # ── Format RAG passages ───────────────────────────────────────────────
-        passages = retrieval_result.get("rag_passages", [])
-        if passages:
-            rag_text = "\n---\n".join(
-                f"[Source: {p['source']}]\n{p['content']}"
-                for p in passages
-            )
-        else:
-            rag_text = "No relevant context retrieved."
+        criterion_scores = []
 
-        # ── Format ontology concepts ──────────────────────────────────────────
-        onto_items = retrieval_result.get("ontology_concepts", [])
-        onto_text  = "\n".join(onto_items) if onto_items else "No ontology concepts matched."
+        for flag in coverage_result.get("criterion_flags", []):
+            criterion  = flag["criterion"]
+            max_marks  = flag["max_marks"]
+            crit_lower = criterion.lower()
 
-        # ── Build prompt ──────────────────────────────────────────────────────
-        prompt = SCORING_PROMPT.format(
-            question=question["question_en"],
-            marking_guide_text=mg_text,
-            rag_context=rag_text,
-            ontology_concepts=onto_text,
-            student_answer=student_answer,
-        )
+            # Extract meaningful words from criterion (len > 4)
+            crit_words = [w for w in crit_lower.split() if len(w) > 4]
 
-        # ── Call OLLAMA ───────────────────────────────────────────────────────
-        client   = ollama.Client(host=OLLAMA_BASE_URL)
-        response = client.generate(model=OLLAMA_MODEL, prompt=prompt)
-        raw      = response.get("response", "")
+            # ── Signal 1: Direct keyword hit in student answer ────────────────
+            answer_hits = sum(1 for w in crit_words if w in answer_lower)
+            answer_ratio = answer_hits / len(crit_words) if crit_words else 0
 
-        # ── Parse JSON ────────────────────────────────────────────────────────
-        json_match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if json_match:
-            try:
-                result = json.loads(json_match.group())
+            # ── Signal 2: RAG passage supports the criterion ──────────────────
+            rag_hits   = sum(1 for w in crit_words if w in rag_text)
+            rag_ratio  = rag_hits / len(crit_words) if crit_words else 0
 
-                # Clamp individual awarded marks to their max
-                for cs in result.get("criterion_scores", []):
-                    cs["awarded"] = max(0, min(cs["awarded"], cs["max"]))
+            # ── Signal 3: Ontology concept matched ───────────────────────────
+            onto_hit   = any(w in onto_text for w in crit_words)
 
-                # Recompute total from criterion scores
-                computed_total = sum(
-                    cs["awarded"]
-                    for cs in result.get("criterion_scores", [])
-                )
-                result["total_score"] = min(computed_total, MAX_MARKS)
-                return result
+            # ── Scoring formula ───────────────────────────────────────────────
+            # Base: answer coverage drives the score
+            # Bonus: RAG + ontology confirm the concept exists
+            base_score = answer_ratio * max_marks
 
-            except (json.JSONDecodeError, KeyError):
-                pass  # fall through to fallback
+            # Bonus up to 20% extra if RAG confirms + ontology matches
+            bonus = 0
+            if rag_ratio > 0.3:
+                bonus += 0.1 * max_marks
+            if onto_hit:
+                bonus += 0.1 * max_marks
 
-        # ── Fallback ──────────────────────────────────────────────────────────
+            raw_score = min(base_score + bonus, max_marks)
+            awarded   = round(raw_score)
+            awarded   = max(0, min(awarded, max_marks))
+
+            # ── Build reason ──────────────────────────────────────────────────
+            if awarded == max_marks:
+                reason = f"Fully addressed. Answer contains {answer_hits}/{len(crit_words)} key terms."
+            elif awarded >= max_marks * 0.6:
+                reason = f"Partially addressed. {answer_hits}/{len(crit_words)} key terms found in answer."
+            elif awarded > 0:
+                reason = f"Weakly addressed. Only {answer_hits}/{len(crit_words)} key terms present."
+            else:
+                reason = f"Not addressed. None of the expected key terms found in answer."
+
+            if onto_hit:
+                reason += " Ontology concept confirmed."
+            if rag_ratio > 0.3:
+                reason += " Supported by knowledge base."
+
+            criterion_scores.append({
+                "criterion": criterion,
+                "awarded":   awarded,
+                "max":       max_marks,
+                "reason":    reason,
+            })
+
+        total = min(sum(c["awarded"] for c in criterion_scores), MAX_MARKS)
+
         return {
-            "criterion_scores": [
-                {
-                    "criterion": c["criterion"],
-                    "awarded":   0,
-                    "max":       c["marks"],
-                    "reason":    "Could not parse LLM response.",
-                }
-                for c in question["marking_guide"]
-            ],
-            "total_score":     0,
-            "overall_comment": (
-                f"Scoring failed due to response parsing error. "
-                f"Raw output (first 300 chars): {raw[:300]}"
-            ),
+            "criterion_scores": criterion_scores,
+            "total_score":      total,
+            "overall_comment":  "",   # filled by ExplanationAgent
         }

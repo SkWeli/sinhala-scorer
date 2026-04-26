@@ -1,13 +1,27 @@
+# Ollama client
 ollama>=0.1.8
+
+# LangChain — core only, no sentence-transformers
 langchain>=0.2.0
-langchain-community>=0.2.0
+langchain-core>=0.2.0
 langchain-ollama>=0.1.0
+
+# ChromaDB — use raw client only
 chromadb>=0.5.0
-sentence-transformers>=2.7.0
+
+# Ontology
 owlready2>=0.46
-streamlit>=1.35.0
-streamlit-extras>=0.4.0
-python-dotenv>=1.0.0
 rdflib>=7.0.0
+
+# UI
+streamlit>=1.35.0
+
+# Data
 numpy>=1.26.0
 pandas>=2.2.0
+
+# Text splitting (standalone, no torch dependency)
+langchain-text-splitters>=0.2.0
+
+# Utilities
+python-dotenv>=1.0.0

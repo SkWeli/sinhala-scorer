@@ -1,75 +1,65 @@
 """
 Agent 4 — Explanation Agent
-Generates a student-friendly, evidence-grounded explanation
-based on the scoring results and retrieved knowledge base passages.
+Uses LLM only for a SHORT explanation paragraph.
+Much faster than full scoring — typically 20-40 seconds.
 """
 
-import json
 import ollama
-
-from config.settings import OLLAMA_MODEL, OLLAMA_BASE_URL
+from config.settings import OLLAMA_SINHALA_MODEL, OLLAMA_BASE_URL
 
 
 EXPLANATION_PROMPT = """\
-You are a warm, supportive Sri Lankan history teacher providing
-detailed feedback to a student on their exam answer.
+You are a Sri Lankan history teacher. A student answered a question and received this score:
 
-SCORING RESULT:
-{scoring_json}
+Total Score: {total_score}/20
+Criteria results:
+{criteria_summary}
 
-RELEVANT KNOWLEDGE BASE EVIDENCE:
+Top 2 knowledge base references:
 {rag_context}
 
-Write feedback using EXACTLY this structure:
+Write SHORT feedback (max 150 words) covering:
+1. One sentence on overall performance
+2. Two bullet points on what was done well
+3. Two bullet points on what to improve
 
-**Overall Performance**
-<2 sentences summarising the student's performance and total score.>
-
-**What You Did Well ✅**
-- <point 1>
-- <point 2>
-- <point 3 if applicable>
-
-**Areas to Improve 📚**
-- <specific gap with a constructive hint>
-- <another gap with a hint referencing the knowledge base>
-- <another if needed>
-
-**Key Concepts for a Full-Mark Answer 🔑**
-- <concept from ontology/knowledge base that was missing or incomplete>
-- <another key concept>
-- <another key concept>
-
-Keep the tone encouraging and academic. Write in English.
+Write in English. Be encouraging.
 """
 
 
 class ExplanationAgent:
-    """
-    Responsibilities:
-      - Format scoring results and RAG context into a feedback prompt
-      - Call OLLAMA to generate structured student feedback
-      - Return the explanation as a formatted string
-    """
 
     def run(self, scoring_result: dict, retrieval_result: dict) -> str:
-        scoring_json = json.dumps(scoring_result, indent=2, ensure_ascii=False)
+        # Build a compact criteria summary
+        lines = []
+        for c in scoring_result.get("criterion_scores", []):
+            status = "✅" if c["awarded"] >= c["max"] * 0.7 else "⚠️" if c["awarded"] > 0 else "❌"
+            lines.append(f"{status} {c['criterion']}: {c['awarded']}/{c['max']}")
+        criteria_summary = "\n".join(lines)
 
-        # Use top 3 passages as evidence in the explanation
-        passages = retrieval_result.get("rag_passages", [])[:3]
-        if passages:
-            rag_context = "\n".join(
-                f"- [{p['source']}]: {p['content'][:250]}"
-                for p in passages
-            )
-        else:
-            rag_context = "No context available."
+        # Only top 2 passages to keep prompt short
+        passages = retrieval_result.get("rag_passages", [])[:2]
+        rag_context = "\n".join(
+            f"- [{p['source']}]: {p['content'][:150]}"
+            for p in passages
+        ) if passages else "No context."
 
         prompt = EXPLANATION_PROMPT.format(
-            scoring_json=scoring_json,
+            total_score=scoring_result.get("total_score", 0),
+            criteria_summary=criteria_summary,
             rag_context=rag_context,
         )
 
-        client   = ollama.Client(host=OLLAMA_BASE_URL)
-        response = client.generate(model=OLLAMA_MODEL, prompt=prompt)
-        return response.get("response", "Explanation could not be generated.")
+        try:
+            client   = ollama.Client(host=OLLAMA_BASE_URL)
+            response = client.generate(
+                model=OLLAMA_SINHALA_MODEL,
+                prompt=prompt,
+                options={
+                    "num_predict": 250,   # short output — fast
+                    "temperature": 0.7,
+                },
+            )
+            return response.get("response", "Explanation unavailable.")
+        except Exception as e:
+            return f"Explanation unavailable: {e}"

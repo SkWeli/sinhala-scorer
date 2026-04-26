@@ -1,0 +1,204 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xml:base="http://colonial-sl.owl"
+         xmlns="http://colonial-sl.owl#">
+
+<owl:Ontology rdf:about="http://colonial-sl.owl"/>
+
+<owl:ObjectProperty rdf:about="#ruled_by">
+  <rdfs:domain rdf:resource="#Location"/>
+  <rdfs:range rdf:resource="#ColonialPower"/>
+</owl:ObjectProperty>
+
+<owl:ObjectProperty rdf:about="#introduced">
+  <rdfs:domain rdf:resource="#ColonialPower"/>
+  <rdfs:range rdf:resource="#Policy"/>
+</owl:ObjectProperty>
+
+<owl:ObjectProperty rdf:about="#had_ruler">
+  <rdfs:domain rdf:resource="#ColonialPower"/>
+  <rdfs:range rdf:resource="#Ruler"/>
+</owl:ObjectProperty>
+
+<owl:ObjectProperty rdf:about="#succeeded_by">
+  <rdfs:domain rdf:resource="#ColonialPower"/>
+  <rdfs:range rdf:resource="#ColonialPower"/>
+</owl:ObjectProperty>
+
+<owl:ObjectProperty rdf:about="#caused">
+  <rdfs:domain rdf:resource="#Event"/>
+  <rdfs:range rdf:resource="#Policy"/>
+</owl:ObjectProperty>
+
+<owl:Class rdf:about="#ColonialPower">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#Ruler">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#Event">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#Policy">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#EconomicSystem">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#ReligiousImpact">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#AdministrativeReform">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#Location">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#LegalSystem">
+  <rdfs:subClassOf rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+</owl:Class>
+
+<owl:Class rdf:about="#CatholicMission">
+  <rdfs:subClassOf rdf:resource="#ReligiousImpact"/>
+</owl:Class>
+
+<owl:Class rdf:about="#DutchReformedChurch">
+  <rdfs:subClassOf rdf:resource="#ReligiousImpact"/>
+</owl:Class>
+
+<owl:Class rdf:about="#BuddhistRevival">
+  <rdfs:subClassOf rdf:resource="#ReligiousImpact"/>
+</owl:Class>
+
+<owl:NamedIndividual rdf:about="#Portuguese">
+  <rdf:type rdf:resource="#ColonialPower"/>
+  <succeeded_by rdf:resource="#Dutch"/>
+  <had_ruler rdf:resource="#AlfonsoDeAlbuquerque"/>
+  <had_ruler rdf:resource="#LopoSoaresDeAlbergaria"/>
+  <introduced rdf:resource="#ForcedConversion"/>
+  <introduced rdf:resource="#CinnamonMonopoly"/>
+  <introduced rdf:resource="#Rajakariya_ForcedLabour"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#Dutch">
+  <rdf:type rdf:resource="#ColonialPower"/>
+  <succeeded_by rdf:resource="#British"/>
+  <had_ruler rdf:resource="#RijckloffVanGoens"/>
+  <introduced rdf:resource="#VOC_TradeMonopoly"/>
+  <introduced rdf:resource="#RomanDutchLaw"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#British">
+  <rdf:type rdf:resource="#ColonialPower"/>
+  <had_ruler rdf:resource="#RobertBrownrigg"/>
+  <introduced rdf:resource="#ColebrookeCameronReforms_1833"/>
+  <introduced rdf:resource="#PlantationEconomy"/>
+  <introduced rdf:resource="#EnglishCommonLaw"/>
+  <introduced rdf:resource="#AbolitionOfRajakariya_1832"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#AlfonsoDeAlbuquerque">
+  <rdf:type rdf:resource="#Ruler"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#LopoSoaresDeAlbergaria">
+  <rdf:type rdf:resource="#Ruler"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#RijckloffVanGoens">
+  <rdf:type rdf:resource="#Ruler"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#RobertBrownrigg">
+  <rdf:type rdf:resource="#Ruler"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#CinnamonMonopoly">
+  <rdf:type rdf:resource="#Policy"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#ForcedConversion">
+  <rdf:type rdf:resource="#Policy"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#Rajakariya_ForcedLabour">
+  <rdf:type rdf:resource="#Policy"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#VOC_TradeMonopoly">
+  <rdf:type rdf:resource="#EconomicSystem"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#ColebrookeCameronReforms_1833">
+  <rdf:type rdf:resource="#AdministrativeReform"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#AbolitionOfRajakariya_1832">
+  <rdf:type rdf:resource="#AdministrativeReform"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#PlantationEconomy">
+  <rdf:type rdf:resource="#EconomicSystem"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#RomanDutchLaw">
+  <rdf:type rdf:resource="#LegalSystem"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#EnglishCommonLaw">
+  <rdf:type rdf:resource="#LegalSystem"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#Colombo">
+  <rdf:type rdf:resource="#Location"/>
+  <ruled_by rdf:resource="#Portuguese"/>
+  <ruled_by rdf:resource="#Dutch"/>
+  <ruled_by rdf:resource="#British"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#Galle">
+  <rdf:type rdf:resource="#Location"/>
+  <ruled_by rdf:resource="#Portuguese"/>
+  <ruled_by rdf:resource="#Dutch"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#Jaffna">
+  <rdf:type rdf:resource="#Location"/>
+  <ruled_by rdf:resource="#Portuguese"/>
+  <ruled_by rdf:resource="#Dutch"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#Kandy">
+  <rdf:type rdf:resource="#Location"/>
+  <ruled_by rdf:resource="#British"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#PortugueseArrival_1505">
+  <rdf:type rdf:resource="#Event"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#DutchConquest_1658">
+  <rdf:type rdf:resource="#Event"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#BritishTakeover_1796">
+  <rdf:type rdf:resource="#Event"/>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#KandyanConvention_1815">
+  <rdf:type rdf:resource="#Event"/>
+</owl:NamedIndividual>
+
+
+</rdf:RDF>

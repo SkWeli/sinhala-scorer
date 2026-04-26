@@ -3,9 +3,9 @@ import os
 
 # OLLAMA
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "Tharusha_Dilhara_Jayadeera/singemma"            # change to any locally pulled model
-OLLAMA_EMBED_MODEL = "nomic-embed-text"  # local embedding model
-
+OLLAMA_MODEL       = "qwen2.5:7b"           # main scorer — reliable JSON output
+OLLAMA_SINHALA_MODEL = "Tharusha_Dilhara_Jayadeera/singemma:latest"  # explanation only
+OLLAMA_EMBED_MODEL = "nomic-embed-text"
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KNOWLEDGE_BASE_DIR = os.path.join(BASE_DIR, "knowledge_base")

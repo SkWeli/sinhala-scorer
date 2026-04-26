@@ -2,7 +2,12 @@
 Sinhala Answer Scorer — Streamlit Entry Point
 Run: streamlit run app.py
 """
-import sys, os
+import sys
+import os
+import time
+import pandas as pd
+import threading
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import streamlit as st
@@ -31,6 +36,16 @@ inject_custom_css()
 def get_orchestrator():
     return OrchestratorAgent()
 
+# ── Era flag helper ───────────────────────────────────────────────────────────
+ERA_FLAGS = {
+    "portuguese": "🇵🇹",
+    "dutch":      "🇳🇱",
+    "british":    "🇬🇧",
+}
+
+def era_flag(era: str) -> str:
+    return ERA_FLAGS.get(era.lower(), "🏛️")
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
@@ -45,8 +60,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown("**⚙️ Model Settings**")
-    model_info = st.empty()
-    model_info.markdown("""
+    st.markdown("""
     <div style="background:#0f3460; border-radius:8px; padding:12px; font-size:13px; color:#a0a0c0;">
         🤖 LLM: <b style="color:#e8e8f0;">llama3.1:8b</b><br>
         📦 Embeddings: <b style="color:#e8e8f0;">nomic-embed-text</b><br>
@@ -56,7 +70,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown("<hr style='border-color:#0f3460;'>", unsafe_allow_html=True)
-    st.markdown("**📖 Topic**")
+    st.markdown("**📖 Colonial Periods**")
     st.markdown("""
     <div style="color:#a0a0c0; font-size:13px; line-height:1.8;">
         🇵🇹 Portuguese (1505–1658)<br>
@@ -82,56 +96,73 @@ with st.sidebar:
 # ── Main Panel ────────────────────────────────────────────────────────────────
 render_header()
 
-# Question selector
+# ── Question Selector ─────────────────────────────────────────────────────────
 q_options = {
-    f"Q{q['id']}: [{q['topic']}] {q['question_en'][:60]}…": q
-    for q in QUESTIONS
+    f"Q{qid}: [{era_flag(q['era'])} {q['era'].capitalize()}] {q['text'][:65]}…": (qid, q)
+    for qid, q in QUESTIONS.items()
 }
+
 selected_label = st.selectbox(
     "**📝 Select a Question**",
     list(q_options.keys()),
-    help="Choose one of the 5 exam questions"
+    help="Choose one of the exam questions",
 )
-selected_q = q_options[selected_label]
+selected_id, selected_q = q_options[selected_label]
 
-# Show question in both languages
-col1, col2 = st.columns([1, 1])
+# Inject id into the question dict so agents can reference it
+selected_q = {**selected_q, "id": selected_id}
+
+# ── Question Display ──────────────────────────────────────────────────────────
+col1, col2 = st.columns([3, 1])
+
 with col1:
     st.markdown(f"""
     <div style="background:#16213e; border-radius:10px; padding:16px 20px;
-                border: 1px solid #0f3460; min-height:80px;">
-        <div style="color:#8080a0; font-size:12px; margin-bottom:6px;">🇬🇧 English</div>
-        <div style="color:#e8e8f0; font-size:15px; line-height:1.6;">{selected_q['question_en']}</div>
+                border:1px solid #0f3460; min-height:80px;">
+        <div style="color:#8080a0; font-size:12px; margin-bottom:6px;">
+            📝 Question {selected_id}
+        </div>
+        <div style="color:#e8e8f0; font-size:15px; line-height:1.7;">
+            {selected_q['text']}
+        </div>
     </div>
     """, unsafe_allow_html=True)
+
 with col2:
     st.markdown(f"""
     <div style="background:#16213e; border-radius:10px; padding:16px 20px;
-                border: 1px solid #0f3460; min-height:80px;">
-        <div style="color:#8080a0; font-size:12px; margin-bottom:6px;">🇱🇰 සිංහල</div>
-        <div style="color:#e8e8f0; font-size:16px; line-height:1.8;">{selected_q['question_si']}</div>
+                border:1px solid #0f3460; min-height:80px; text-align:center;">
+        <div style="color:#8080a0; font-size:12px; margin-bottom:8px;">🏛️ Colonial Era</div>
+        <div style="font-size:32px;">{era_flag(selected_q['era'])}</div>
+        <div style="color:#e8e8f0; font-size:14px; font-weight:600; margin-top:4px;">
+            {selected_q['era'].capitalize()}
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-# Show marking guide
+# ── Marking Guide ─────────────────────────────────────────────────────────────
 with st.expander("📋 View Marking Guide", expanded=False):
     total = 0
-    for i, c in enumerate(selected_q["marking_guide"], 1):
+    for i, (criterion, marks) in enumerate(selected_q["guide"].items(), 1):
         st.markdown(f"""
         <div class="criterion-card">
-            <b style="color:#a0c4ff;">{i}. {c['criterion']}</b>
-            <span style="float:right; color:#4ade80; font-weight:600;">{c['marks']} marks</span>
+            <b style="color:#a0c4ff;">{i}. {criterion}</b>
+            <span style="float:right; color:#4ade80; font-weight:600;">{marks} marks</span>
         </div>
         """, unsafe_allow_html=True)
-        total += c["marks"]
-    st.markdown(f"**Total: {total}/20**")
+        total += marks
+    st.markdown(
+        f"<div style='color:#a0a0c0; margin-top:8px; font-size:13px;'>"
+        f"Total allocatable marks: <b style='color:#e8e8f0;'>{total}/20</b></div>",
+        unsafe_allow_html=True,
+    )
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Answer input
-st.markdown("**✍️ ඔබේ පිළිතුර ලියන්න (Write your answer in Sinhala)**")
+# ── Answer Input ──────────────────────────────────────────────────────────────
 student_answer = st.text_area(
-    label="",
+    label="✍️ ඔබේ පිළිතුර ලියන්න (Write your answer in Sinhala)",
+    label_visibility="visible",
     placeholder="මෙහි ඔබේ සිංහල පිළිතුර ටයිප් කරන්න… (Type your Sinhala answer here…)",
     height=220,
     key="student_answer_input",
@@ -140,114 +171,98 @@ student_answer = st.text_area(
 st.markdown("<br>", unsafe_allow_html=True)
 submit = st.button("🎯 Score My Answer")
 
-# ── Scoring Pipeline ──────────────────────────────────────────────────────────
+result = None
+
 if submit:
     if not student_answer.strip():
         st.warning("⚠️ Please enter your answer before submitting.")
     else:
         orchestrator = get_orchestrator()
 
-        # Show live pipeline progress
         st.markdown("---")
-        st.markdown("**⚙️ Scoring Pipeline**")
-        progress_bar = st.progress(0)
-        status_text  = st.empty()
+        st.markdown("**⚙️ Scoring Pipeline — Running…**")
+        st.info("⏳ Scoring your answer offline. Please wait and do NOT refresh.")
 
-        status_text.markdown("🔍 **Agent 1:** Retrieving relevant passages + ontology concepts…")
-        progress_bar.progress(15)
+        progress_bar = st.progress(20)
+        status_text = st.empty()
+        status_text.markdown("🔎 **Agent 1:** Retrieving RAG + ontology context…")
 
-        result = None
-        with st.spinner("Running multi-agent scoring pipeline…"):
-            try:
-                # Patch orchestrator to report progress via session state
-                # (full pipeline runs inside score_answer)
-                import time
-
-                status_text.markdown("🧠 **Agent 2:** Checking criterion coverage…")
-                progress_bar.progress(35)
-                time.sleep(0.3)
-
-                status_text.markdown("⚖️ **Agent 3:** LLM scoring each criterion via OLLAMA…")
+        try:
+            with st.spinner("Please wait — scoring in progress…"):
                 progress_bar.progress(55)
+                status_text.markdown("⚖️ **Agents 2–3:** Checking coverage and scoring…")
 
                 result = orchestrator.score_answer(selected_q, student_answer)
 
-                status_text.markdown("💡 **Agent 4:** Generating explainable feedback…")
-                progress_bar.progress(85)
-                time.sleep(0.2)
+                progress_bar.progress(90)
+                status_text.markdown("📝 **Agent 4:** Generating explanation…")
+
+                st.session_state["last_result"] = result
+                st.session_state["last_question_id"] = selected_id
+                st.session_state["last_question_text"] = selected_q["text"]
+                st.session_state["last_era"] = selected_q["era"]
 
                 progress_bar.progress(100)
-                status_text.markdown("✅ **Scoring complete!**")
 
-            except Exception as e:
-                st.error(f"❌ Error during scoring: {e}")
-                st.stop()
+        except Exception as e:
+            st.error(f"❌ Scoring failed: {e}")
+            st.stop()
 
-        if result:
-            st.markdown("---")
+if "last_result" in st.session_state:
+    result = st.session_state["last_result"]
 
-            # Score card
-            render_score_card(result["final_score"], result["max_score"])
+    st.markdown("---")
+    render_score_card(result["final_score"], result["max_score"])
+    st.markdown("<br>", unsafe_allow_html=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)
+    left, right = st.columns([3, 2])
 
-            # Three columns: breakdown | ontology | sources
-            left, right = st.columns([3, 2])
+    with left:
+        render_criterion_breakdown(result["scoring"].get("criterion_scores", []))
 
-            with left:
-                render_criterion_breakdown(
-                    result["scoring"].get("criterion_scores", [])
-                )
+    with right:
+        coverage = result.get("coverage", {})
+        ratio = coverage.get("coverage_ratio", 0)
+        color = "#4ade80" if ratio > 0.6 else "#fbbf24" if ratio > 0.3 else "#f87171"
 
-            with right:
-                # Coverage summary
-                coverage = result.get("coverage", {})
-                ratio = coverage.get("coverage_ratio", 0)
-                st.markdown("### 📊 Coverage Analysis")
-                st.markdown(f"""
-                <div style="background:#16213e; border-radius:10px; padding:16px 20px;
-                            border:1px solid #0f3460;">
-                    <div style="color:#a0a0c0; font-size:13px;">Surface criterion coverage</div>
-                    <div style="font-size:32px; font-weight:700;
-                                color:{'#4ade80' if ratio > 0.6 else '#fbbf24' if ratio > 0.3 else '#f87171'};">
-                        {int(ratio*100)}%
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                st.progress(ratio)
+        st.markdown("### 📊 Coverage Analysis")
+        st.markdown(f"""
+        <div style="background:#16213e; border-radius:10px; padding:16px 20px;
+                    border:1px solid #0f3460;">
+            <div style="color:#a0a0c0; font-size:13px;">Surface criterion coverage</div>
+            <div style="font-size:32px; font-weight:700; color:{color};">{int(ratio*100)}%</div>
+            <div style="color:#8080a0; font-size:12px; margin-top:4px;">
+                Keywords found: {', '.join(coverage.get('topic_keywords_found', [])) or 'none'}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                render_ontology_concepts(
-                    result["retrieval"].get("ontology_concepts", [])
-                )
+        st.progress(ratio)
+        st.markdown("<br>", unsafe_allow_html=True)
+        render_ontology_concepts(result["retrieval"].get("ontology_concepts", []))
 
-            # RAG evidence
-            render_rag_sources(result["retrieval"].get("rag_passages", []))
+    render_rag_sources(result["retrieval"].get("rag_passages", []))
+    render_explanation(result.get("explanation", ""))
 
-            # Explanation
-            render_explanation(result.get("explanation", ""))
+    overall = result["scoring"].get("overall_comment", "")
+    if overall:
+        st.markdown("### 🗒️ Examiner's Note")
+        st.info(overall)
 
-            # Overall comment from LLM
-            overall = result["scoring"].get("overall_comment", "")
-            if overall:
-                st.markdown("### 🗒️ Examiner's Note")
-                st.info(overall)
-
-# ── History (session) ─────────────────────────────────────────────────────────
+# ── Session Score History ─────────────────────────────────────────────────────
 if "history" not in st.session_state:
     st.session_state.history = []
 
 if submit and result:
     st.session_state.history.append({
-        "q": selected_q["question_en"][:50],
-        "score": result["final_score"],
+        "Question": f"Q{selected_id}: {selected_q['text'][:45]}…",
+        "Era":      selected_q["era"].capitalize(),
+        "Score /20": result["final_score"],
     })
 
 if st.session_state.history:
     st.markdown("---")
     st.markdown("### 📈 Session Score History")
-    import pandas as pd
     df = pd.DataFrame(st.session_state.history)
     df.index += 1
-    df.columns = ["Question", "Score /20"]
     st.dataframe(df, use_container_width=True)

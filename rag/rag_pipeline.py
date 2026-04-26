@@ -1,13 +1,13 @@
 """
-RAG Pipeline — fully offline.
-Uses ChromaDB + nomic-embed-text (via Ollama) for embedding and retrieval.
-Indexes portuguese.txt, dutch.txt, british.txt from knowledge_base/.
+RAG Pipeline — fully offline, no torch/sentence-transformers dependency.
+Uses raw file reading + langchain-text-splitters + chromadb + ollama embeddings.
 """
 
 import os
-from langchain_community.document_loaders import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+import chromadb
+from chromadb.config import Settings as ChromaSettings
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 
 from config.settings import (
@@ -28,27 +28,50 @@ def _get_embeddings() -> OllamaEmbeddings:
     )
 
 
-def build_vector_store(force_rebuild: bool = False) -> Chroma:
-    """
-    Load knowledge-base text files, chunk them, embed with nomic-embed-text,
-    and persist the resulting ChromaDB to disk.
-    """
-    if os.path.exists(VECTOR_STORE_DIR) and not force_rebuild:
-        print("[RAG] Vector store already exists — loading existing index.")
-        return load_vector_store()
+def _get_chroma_client() -> chromadb.PersistentClient:
+    os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
+    return chromadb.PersistentClient(
+        path=VECTOR_STORE_DIR,
+        settings=ChromaSettings(anonymized_telemetry=False),
+    )
 
+
+def _load_txt(fpath: str, source: str) -> list[Document]:
+    """Read a plain text file and return as a LangChain Document."""
+    with open(fpath, "r", encoding="utf-8") as f:
+        content = f.read()
+    return [Document(page_content=content, metadata={"source": source})]
+
+
+def build_vector_store(force_rebuild: bool = False) -> None:
+    """
+    Load .txt knowledge base files, chunk, embed via Ollama,
+    and persist into ChromaDB — no torch, no ONNX, no sentence-transformers.
+    """
+    client = _get_chroma_client()
+
+    existing = [c.name for c in client.list_collections()]
+
+    if "colonial_kb" in existing and not force_rebuild:
+        print("[RAG] Collection 'colonial_kb' already exists — skipping rebuild.")
+        return
+
+    if "colonial_kb" in existing:
+        client.delete_collection("colonial_kb")
+
+    # Load documents manually (no langchain-community loader needed)
     docs = []
-    for fname in ["portuguese.txt", "dutch.txt", "british.txt"]:
+    for fname, source in [
+        ("portuguese.txt", "Portuguese"),
+        ("dutch.txt",      "Dutch"),
+        ("british.txt",    "British"),
+    ]:
         fpath = os.path.join(KNOWLEDGE_BASE_DIR, fname)
         if not os.path.exists(fpath):
             print(f"[RAG] WARNING: {fpath} not found — skipping.")
             continue
-        loader = TextLoader(fpath, encoding="utf-8")
-        loaded = loader.load()
-        source_label = fname.replace(".txt", "").capitalize()
-        for doc in loaded:
-            doc.metadata["source"] = source_label
-        docs.extend(loaded)
+        docs.extend(_load_txt(fpath, source))
+        print(f"[RAG] Loaded: {fname}")
 
     if not docs:
         raise FileNotFoundError(
@@ -56,47 +79,63 @@ def build_vector_store(force_rebuild: bool = False) -> Chroma:
             "Please add portuguese.txt, dutch.txt, british.txt."
         )
 
+    # Chunk
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
     )
     chunks = splitter.split_documents(docs)
-    print(f"[RAG] Indexing {len(chunks)} chunks from {len(docs)} document(s)…")
+    print(f"[RAG] Split into {len(chunks)} chunks from {len(docs)} file(s).")
 
+    # Create collection (no default EF — we supply embeddings manually)
     embeddings = _get_embeddings()
-    vectordb = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        persist_directory=VECTOR_STORE_DIR,
+    collection = client.create_collection(
+        name="colonial_kb",
+        metadata={"hnsw:space": "cosine"},
     )
-    print(f"[RAG] Vector store persisted → {VECTOR_STORE_DIR}")
-    return vectordb
 
+    # Embed and insert in batches
+    BATCH = 40
+    for i in range(0, len(chunks), BATCH):
+        batch     = chunks[i : i + BATCH]
+        texts     = [c.page_content for c in batch]
+        metadatas = [c.metadata     for c in batch]
+        ids       = [f"chunk_{i + j}" for j in range(len(batch))]
+        vectors   = embeddings.embed_documents(texts)
 
-def load_vector_store() -> Chroma:
-    """Load an already-built ChromaDB from disk."""
-    return Chroma(
-        persist_directory=VECTOR_STORE_DIR,
-        embedding_function=_get_embeddings(),
-    )
+        collection.add(
+            ids=ids,
+            embeddings=vectors,
+            documents=texts,
+            metadatas=metadatas,
+        )
+        print(f"[RAG]   Stored chunks {i + 1}–{i + len(batch)}")
+
+    print(f"[RAG] ✅ Vector store ready → {VECTOR_STORE_DIR}")
 
 
 def retrieve_context(query: str, topic: str = "") -> list[dict]:
-    """
-    Retrieve the top-K most relevant passages using MMR search.
-    Returns a list of {content, source} dicts.
-    """
-    vectordb = load_vector_store()
-    retriever = vectordb.as_retriever(
-        search_type="mmr",
-        search_kwargs={"k": TOP_K_RETRIEVAL, "fetch_k": 15},
-    )
+    """Retrieve top-K relevant passages using cosine similarity."""
+    client     = _get_chroma_client()
+    embeddings = _get_embeddings()
+
+    collection = client.get_collection("colonial_kb")
     full_query = f"{topic} {query}".strip()
-    docs = retriever.invoke(full_query)
+    query_vec  = embeddings.embed_query(full_query)
+
+    results = collection.query(
+        query_embeddings=[query_vec],
+        n_results=TOP_K_RETRIEVAL,
+        include=["documents", "metadatas"],
+    )
+
     return [
         {
-            "content": d.page_content,
-            "source":  d.metadata.get("source", "Unknown"),
+            "content": doc,
+            "source":  meta.get("source", "Unknown"),
         }
-        for d in docs
+        for doc, meta in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+        )
     ]
