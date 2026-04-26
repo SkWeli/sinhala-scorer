@@ -55,12 +55,11 @@ class OrchestratorAgent:
 
         try:
             # ── Step 1: Retrieval ─────────────────────────────────────────────
-            print("[Orchestrator] Step 1: Retrieval…", flush=True)
-            retrieval_result = self.retrieval.run(question_text, topic)
-            print(f"[Orchestrator] Retrieval done. "
-                f"RAG: {len(retrieval_result['rag_passages'])} passages, "
-                f"Ontology: {len(retrieval_result['ontology_concepts'])} concepts.",
-                flush=True)
+            print("SKIPPING RETRIEVAL", flush=True)
+            retrieval_result = {
+                "rag_passages": [],
+                "ontology_concepts": []
+            }
 
             # ── Step 2: Coverage Check ────────────────────────────────────────
             coverage_result = self.coverage.run(
