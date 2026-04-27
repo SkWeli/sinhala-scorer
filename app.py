@@ -62,9 +62,9 @@ with st.sidebar:
     st.markdown("**⚙️ Model Settings**")
     st.markdown("""
     <div style="background:#0f3460; border-radius:8px; padding:12px; font-size:13px; color:#a0a0c0;">
-        🤖 LLM: <b style="color:#e8e8f0;">llama3.1:8b</b><br>
+        🤖 LLM: <b style="color:#e8e8f0;">SinGemma via Ollama</b><br>
         📦 Embeddings: <b style="color:#e8e8f0;">nomic-embed-text</b><br>
-        🗄️ Vector DB: <b style="color:#e8e8f0;">ChromaDB (local)</b><br>
+        🗄️ Vector Store: <b style="color:#e8e8f0;">JSON + cosine similarity</b><br>
         🔗 Ontology: <b style="color:#e8e8f0;">OWL 2.0 (owlready2)</b>
     </div>
     """, unsafe_allow_html=True)

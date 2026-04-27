@@ -9,12 +9,14 @@ OLLAMA_EMBED_MODEL = "nomic-embed-text"
 # Paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KNOWLEDGE_BASE_DIR = os.path.join(BASE_DIR, "knowledge_base")
-VECTOR_STORE_DIR   = os.path.join(BASE_DIR, "vector_store", "chroma_db")
+VECTOR_STORE_DIR   = os.path.join(BASE_DIR, "vector_store")
 ONTOLOGY_PATH      = os.path.join(BASE_DIR, "ontology", "colonial_history.owl")
 
 # RAG
 CHUNK_SIZE     = 500
-CHUNK_OVERLAP  = 100
+CHUNK_OVERLAP  = 80
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_EMBED_MODEL = "nomic-embed-text:latest"
 TOP_K_RETRIEVAL = 5
 
 # Scoring

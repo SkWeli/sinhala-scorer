@@ -22,6 +22,24 @@ class OrchestratorAgent:
         self.scoring = ScoringAgent()
         self.explanation = ExplanationAgent()
 
+    def _normalise_retrieval_result(self, retrieval_result: dict) -> dict:
+        """
+        Ensures retrieval output always has the expected structure.
+        This prevents scoring/explanation agents from crashing if retrieval
+        returns slightly different key names.
+        """
+
+        if not isinstance(retrieval_result, dict):
+            return {
+                "rag_passages": [],
+                "ontology_concepts": [],
+            }
+
+        return {
+            "rag_passages": retrieval_result.get("rag_passages", []),
+            "ontology_concepts": retrieval_result.get("ontology_concepts", []),
+        }
+
     def score_answer(self, question: dict, student_answer: str) -> dict:
         """
         Full multi-agent scoring pipeline.
@@ -55,13 +73,26 @@ class OrchestratorAgent:
 
         try:
             # ── Step 1: Retrieval ─────────────────────────────────────────────
-            print("SKIPPING RETRIEVAL", flush=True)
-            retrieval_result = {
-                "rag_passages": [],
-                "ontology_concepts": []
-            }
+            print("[Orchestrator] Step 1: Retrieval…", flush=True)
+
+            retrieval_result = self.retrieval.run(
+                question_text=question_text,
+                student_answer=student_answer,
+                topic=topic,
+            )
+
+            retrieval_result = self._normalise_retrieval_result(retrieval_result)
+
+            print(
+                f"[Orchestrator] Retrieved "
+                f"{len(retrieval_result['rag_passages'])} RAG passage(s) and "
+                f"{len(retrieval_result['ontology_concepts'])} ontology concept(s).",
+                flush=True,
+            )
 
             # ── Step 2: Coverage Check ────────────────────────────────────────
+            print("[Orchestrator] Step 2: Coverage check…", flush=True)
+
             coverage_result = self.coverage.run(
                 student_answer,
                 marking_guide_list,
@@ -69,6 +100,8 @@ class OrchestratorAgent:
             )
 
             # ── Step 3: Rule-based Scoring ───────────────────────────────────
+            print("[Orchestrator] Step 3: Scoring…", flush=True)
+
             scoring_result = self.scoring.run(
                 normalised_question,
                 student_answer,
@@ -77,6 +110,8 @@ class OrchestratorAgent:
             )
 
             # ── Step 4: Lightweight Explanation ──────────────────────────────
+            print("[Orchestrator] Step 4: Explanation…", flush=True)
+
             explanation = self.explanation.run(
                 scoring_result,
                 retrieval_result,
@@ -99,13 +134,18 @@ class OrchestratorAgent:
             }
 
         except Exception as e:
+            print("[Orchestrator] ERROR:", type(e).__name__, e, flush=True)
+
             return {
                 "success": False,
                 "question_id": question.get("id"),
                 "question_text": question_text,
                 "era": topic,
                 "student_answer": student_answer,
-                "retrieval": {},
+                "retrieval": {
+                    "rag_passages": [],
+                    "ontology_concepts": [],
+                },
                 "coverage": {},
                 "scoring": {
                     "total_score": 0,
